@@ -231,7 +231,7 @@ def start_engine_scan(ws: WebSocketTestSession) -> None:
 def test_engine_scan_retries_capture_and_scores_two_sides() -> None:
     with TestClient(app) as client:
         app.state.engine_factory = MockScanEngine
-        app.state.config = load_config().model_copy(update={"scan_seconds": 2.0})
+        app.state.config = load_config().model_copy(update={"engine_scan_seconds": 2.0})
         add_color_frame(0)  # A frame taken before UV was turned on is stale.
         with client.websocket_connect("/ws") as ws:
             start_engine_scan(ws)
@@ -253,7 +253,7 @@ def test_engine_timeout_drops_uv_while_engine_is_blocked() -> None:
     resume = Event()
     entered = Event()
     with TestClient(app) as client:
-        app.state.config = load_config().model_copy(update={"scan_seconds": 0.5})
+        app.state.config = load_config().model_copy(update={"engine_scan_seconds": 0.5})
 
         def factory() -> MockScanEngine:
             engine = MockScanEngine(wait=resume)
@@ -278,7 +278,7 @@ def test_engine_timeout_drops_uv_while_engine_is_blocked() -> None:
 def test_engine_scan_reserves_uv_and_disconnect_aborts_scan() -> None:
     with TestClient(app) as client:
         app.state.engine_factory = MockScanEngine
-        app.state.config = load_config().model_copy(update={"scan_seconds": 5.0})
+        app.state.config = load_config().model_copy(update={"engine_scan_seconds": 5.0})
         with client.websocket_connect("/ws") as observer:
             assert receive_json(observer)["type"] == "uv"
             with client.websocket_connect("/ws") as owner:

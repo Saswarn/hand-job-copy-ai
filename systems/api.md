@@ -60,7 +60,7 @@ Base: `http://localhost:8000` · WebSocket: `ws://localhost:8000/ws`
 
 ### สแกนด้วย HandCleanEngine
 
-ส่ง `{"type":"engine_scan_start"}` ผ่าน `/ws` เพื่อเริ่มรอบแบบ engine เส้นทางนี้ต้องมี engine factory ใน backend และมีแหล่งภาพ RGB หากยังไม่ได้ตั้ง engine factory จะตอบ `error` ว่า `engine scan unavailable` คำสั่ง `scan_start` เดิมยังใช้ลำดับ HAN-17
+ส่ง `{"type":"engine_scan_start"}` ผ่าน `/ws` เพื่อเริ่มรอบแบบ engine เส้นทางนี้เปิดด้วย `HANDCLEAN_ENGINE=real` หรือ `HANDCLEAN_ENGINE=mock` และต้องใช้แหล่งภาพ RGB หากยังไม่ได้เปิดโหมดนี้จะตอบ `error` ว่า `engine scan unavailable` คำสั่ง `scan_start` เดิมยังใช้ลำดับ HAN-17
 
 | `type` | ข้อมูล | ส่งเมื่อ |
 |---|---|---|
@@ -70,7 +70,7 @@ Base: `http://localhost:8000` · WebSocket: `ws://localhost:8000/ws`
 
 Backend ส่งเฉพาะ metadata ของผลสแกนและยังส่งภาพสดเป็น JPEG ตามเดิม ผล `level_map` ยังไม่อยู่ใน WebSocket contract รอบนี้ ผู้ทดสอบสามารถอ่านผลผ่าน WebSocket client ได้
 
-- ใช้เฟรมใหม่หลังเปิด UV เท่านั้น สแกนสำเร็จหนึ่งครั้งต่อด้านฝ่ามือและหลังมือ การจับภาพล้มเหลวลองใหม่ได้ภายใน `scan_seconds`
+- ใช้เฟรมใหม่หลังเปิด UV เท่านั้น สแกนสำเร็จหนึ่งครั้งต่อด้านฝ่ามือและหลังมือ การจับภาพล้มเหลวลองใหม่ได้ภายใน `engine_scan_seconds` (ค่าเริ่มต้น 30 วินาที)
 - WebSocket ทุกตัวใช้สิทธิ์สแกนร่วมกันหนึ่งรอบ ระหว่าง engine scan จะปฏิเสธ `uv_set` และคำสั่งเริ่มสแกนซ้ำ
 - เมื่อจบ หมดเวลา หรือเกิดข้อผิดพลาด backend ดับ UV ก่อนส่งผลหรือ `error` หาก WebSocket หลุด backend ดับ UV และยกเลิกรอบทันที หาก engine ยังทำงานอยู่จะรอให้ worker ปิด session ก่อนรับรอบใหม่
 

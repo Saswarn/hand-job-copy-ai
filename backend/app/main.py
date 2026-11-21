@@ -10,6 +10,7 @@ from app.api import config, health, ws
 from app.core.config import CONFIG_PATH, load_config
 from app.services.camera import Camera, open_camera
 from app.services.detector import Detector
+from app.services.engine_process import configure_engine_factory
 from app.services.stream import Stream
 from app.services.uv import UvService
 
@@ -23,10 +24,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.uv = uv = UvService(cfg.uv_gpio)  # every channel starts off
     app.state.scan_task = None
     app.state.engine_active = False
-    app.state.engine_factory = None  # The engine integration supplies the factory.
     camera: Camera | None = None
     stream: Stream | None = None
     try:
+        app.state.engine_factory = configure_engine_factory()
         app.state.camera = camera = open_camera(cfg.camera)
         detector = Detector()
         app.state.detector = detector

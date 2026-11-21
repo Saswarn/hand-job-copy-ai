@@ -98,6 +98,18 @@ bash systems/scripts/setup-engine.sh
 
 สคริปต์รัน `pip check` และชุดเทสต์ upstream ซึ่งรวมการส่งภาพดำสังเคราะห์ให้ engine จริงและตรวจสถานะเมื่อไม่มีมือ ใช้คำสั่งเดียวกันบน Pi 5 เพื่อยืนยันการติดตั้งบน arm64 ชุดนี้ทดสอบเฉพาะ engine ด้วยภาพสังเคราะห์และไม่เปิดกล้องหรือ UV
 
+### เปิด engine scan ผ่าน WebSocket
+
+หลังติดตั้ง engine แล้ว สามารถลองครบสองด้านด้วย MockEngine ต้นทางและกล้องจำลองบนเครื่องพัฒนาได้
+
+```bash
+CAMERA_SOURCE=fake-rgb HANDCLEAN_ENGINE=mock GPIOZERO_PIN_FACTORY=mock bash systems/scripts/run-backend.sh
+```
+
+บน Pi ให้ใช้ `CAMERA_SOURCE=csi-rgb HANDCLEAN_ENGINE=real` แล้วตั้ง `camera.csi_rgb` ตามหัวข้อภาพสีข้างต้น ทดสอบด้วย GPIO mock ก่อน และใช้ `GPIOZERO_PIN_FACTORY=lgpio` เมื่อตรวจอุปกรณ์จริง ส่ง `{"type":"engine_scan_start"}` ผ่าน `ws://localhost:8000/ws` และอ่านผลตาม [WebSocket API](../api.md)
+
+Backend เรียก process จาก `backend/engine-check/.venv` หนึ่งตัวต่อหนึ่ง scan session และส่งภาพ RGB โดยตรงผ่าน pipe สัญญา deadline ของทั้งรอบใช้ `engine_scan_seconds` ค่าเริ่มต้น 30 วินาที ส่วนการสื่อสารหนึ่งคำสั่งตัดที่ 15 วินาทีเพื่อให้ process ที่ค้างถูกเก็บกวาด การจับภาพเต็มความละเอียดและการเปิด engine บน Pi ยังต้องตรวจว่าสำเร็จภายในเวลาที่ตั้งไว้
+
 ## Type และเทสต์
 
 - `uv run pyright` — strict ทั้ง `app/` และ `tests/` ต้อง 0 error · stub ของ lib ที่ไม่มี type (`gpiozero`, `simplejpeg`, `linuxpy`) อยู่ใน `backend/typings/` เขียนเฉพาะที่ใช้ จะใช้ API ใหม่ของ lib พวกนี้ต้องเพิ่มใน stub ก่อน

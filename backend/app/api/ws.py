@@ -62,7 +62,7 @@ async def ws(websocket: WebSocket) -> None:
                         await websocket.send_text(Error(message="engine scan unavailable").model_dump_json())
                         continue
                     camera: Camera = websocket.app.state.camera
-                    task = asyncio.create_task(_engine_scan(websocket, uv, camera, factory, cfg.scan_seconds))
+                    task = asyncio.create_task(_engine_scan(websocket, uv, camera, factory, cfg.engine_scan_seconds))
                 else:
                     task = asyncio.create_task(_scan(websocket, uv, detector, cfg))
                 websocket.app.state.scan_task = task
