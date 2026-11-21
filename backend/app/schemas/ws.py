@@ -18,13 +18,18 @@ class ScanStart(BaseModel):
     type: Literal["scan_start"]
 
 
+class EngineScanStart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["engine_scan_start"]
+
+
 class BinaryView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal["binary_view"]
     on: bool
 
 
-ClientMessage = Annotated[UvSet | ScanStart | BinaryView, Field(discriminator="type")]
+ClientMessage = Annotated[UvSet | ScanStart | EngineScanStart | BinaryView, Field(discriminator="type")]
 
 
 # backend -> frontend
@@ -40,6 +45,44 @@ class ScanState(BaseModel):
     state: Literal["idle", "scanning", "done"]
     remaining_s: float | None  # seconds left while scanning, else null
     result: Literal["clean", "dirt"] | None  # set when state == "done"
+
+
+Side = Literal["palm", "back"]
+
+
+class EnginePreview(BaseModel):
+    type: Literal["engine_preview"] = "engine_preview"
+    frame_id: int
+    hands_found: int = Field(ge=0, le=2)
+    side: Side | Literal["unsure"] | None
+    stable_ms: int = Field(ge=0)
+    ready_to_capture: bool
+    needed_sides: list[Side]
+    guidance: str
+
+
+class EngineHand(BaseModel):
+    hand: Literal["left", "right"]
+    score: float
+    level_fraction: tuple[float, float, float, float, float]
+
+
+class EngineCapture(BaseModel):
+    type: Literal["engine_capture"] = "engine_capture"
+    status: Literal["ok", "NO_HAND", "ONE_HAND"]
+    side: Side
+    hands: list[EngineHand]
+    warnings: list[str]
+
+
+class EngineResult(BaseModel):
+    type: Literal["engine_result"] = "engine_result"
+    status: Literal["ok", "incomplete"]
+    S: float | None
+    S_worst: float | None
+    worst_view: str | None
+    missing_views: list[str]
+    reason: Literal["timeout"] | None = None
 
 
 class Error(BaseModel):

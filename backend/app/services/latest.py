@@ -18,6 +18,10 @@ class Latest(Generic[T]):
             self._value = value
             self._cond.notify_all()
 
+    def sequence(self) -> int:
+        with self._cond:
+            return self._seq
+
     def wait_newer(self, seq: int, timeout: float) -> tuple[int, T | None]:
         """Block until a value newer than `seq` arrives. Returns (seq, None) on timeout."""
         with self._cond:

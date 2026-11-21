@@ -58,6 +58,22 @@ Base: `http://localhost:8000` · WebSocket: `ws://localhost:8000/ws`
 - ใช้ config ชุดปัจจุบันตอนเริ่มแต่ละรอบ; การเปลี่ยน config ไม่เปลี่ยนเกณฑ์ของรอบที่กำลังทำ
 - `Detector` ยังเป็น stub และไม่มีเลขเฟรม/เวลาผล AI: รอบนี้เก็บ snapshot ล่าสุดตามจังหวะ polling ไม่สามารถยืนยันว่าทุก snapshot เป็นภาพใหม่ การเชื่อม AI จริงต้องจัดการเรื่องนี้แยกต่างหาก
 
+### สแกนด้วย HandCleanEngine
+
+ส่ง `{"type":"engine_scan_start"}` ผ่าน `/ws` เพื่อเริ่มรอบแบบ engine เส้นทางนี้ต้องมี engine factory ใน backend และมีแหล่งภาพ RGB หากยังไม่ได้ตั้ง engine factory จะตอบ `error` ว่า `engine scan unavailable` คำสั่ง `scan_start` เดิมยังใช้ลำดับ HAN-17
+
+| `type` | ข้อมูล | ส่งเมื่อ |
+|---|---|---|
+| `engine_preview` | `frame_id`, `hands_found`, `side`, `stable_ms`, `ready_to_capture`, `needed_sides`, `guidance` | engine ประเมินเฟรมพรีวิวใหม่ |
+| `engine_capture` | `status` (`ok`, `NO_HAND`, `ONE_HAND`), `side`, `hands` (มือ, คะแนน และสัดส่วนคราบ 5 ระดับ), `warnings` | มีการวิเคราะห์ภาพเต็มความละเอียด |
+| `engine_result` | `status` (`ok`, `incomplete`), `S`, `S_worst`, `worst_view`, `missing_views`, `reason` (`null` หรือ `timeout`) | ได้ผลจบจาก engine หรือหมดเวลาสแกน คะแนนเป็น `null` เมื่อหมดเวลา |
+
+Backend ส่งเฉพาะ metadata ของผลสแกนและยังส่งภาพสดเป็น JPEG ตามเดิม ผล `level_map` ยังไม่อยู่ใน WebSocket contract รอบนี้ ผู้ทดสอบสามารถอ่านผลผ่าน WebSocket client ได้
+
+- ใช้เฟรมใหม่หลังเปิด UV เท่านั้น สแกนสำเร็จหนึ่งครั้งต่อด้านฝ่ามือและหลังมือ การจับภาพล้มเหลวลองใหม่ได้ภายใน `scan_seconds`
+- WebSocket ทุกตัวใช้สิทธิ์สแกนร่วมกันหนึ่งรอบ ระหว่าง engine scan จะปฏิเสธ `uv_set` และคำสั่งเริ่มสแกนซ้ำ
+- เมื่อจบ หมดเวลา หรือเกิดข้อผิดพลาด backend ดับ UV ก่อนส่งผลหรือ `error` หาก WebSocket หลุด backend ดับ UV และยกเลิกรอบทันที หาก engine ยังทำงานอยู่จะรอให้ worker ปิด session ก่อนรับรอบใหม่
+
 ## กติกาที่ตกลงแล้ว
 
 - ✅ WebSocket ตัวไหนก็ตามหลุด → backend ดับไฟ UV ทุกช่องทันที

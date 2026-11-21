@@ -2,13 +2,19 @@ import asyncio
 import contextlib
 import logging
 import time
+from threading import Event
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import AppConfig
-from app.schemas.ws import ClientMessage, Error, ScanStart, ScanState, UvSet, UvState
+from app.schemas.ws import (
+    ClientMessage, EngineCapture, EngineResult, EngineScanStart, Error, ScanStart,
+    ScanState, Side, UvSet, UvState,
+)
+from app.services.camera import Camera
 from app.services.detector import Detector
+from app.services.engine_scan import EngineFactory, EngineMessage, run_engine_scan
 from app.services.scan import judge
 from app.services.stream import Stream
 from app.services.uv import UvService
@@ -27,7 +33,6 @@ async def ws(websocket: WebSocket) -> None:
     detector: Detector = websocket.app.state.detector
     await websocket.accept()
     frames = asyncio.create_task(_send_frames(websocket, stream))
-    scan_task: asyncio.Task[None] | None = None
     try:
         await websocket.send_text(UvState(channels=uv.state()).model_dump_json())
         while True:
@@ -37,16 +42,30 @@ async def ws(websocket: WebSocket) -> None:
             except ValidationError as e:
                 await websocket.send_text(Error(message=str(e)).model_dump_json())
                 continue
+            scan_task: asyncio.Task[None] | None = websocket.app.state.scan_task
+            busy = scan_task is not None and not scan_task.done()
             if isinstance(msg, UvSet):
+                if busy and websocket.app.state.engine_active:
+                    await websocket.send_text(Error(message="UV is owned by the engine scan").model_dump_json())
+                    continue
                 uv.set(msg.channel, msg.on)
                 await websocket.send_text(UvState(channels=uv.state()).model_dump_json())
-            elif isinstance(msg, ScanStart):
-                if scan_task is not None and not scan_task.done():
+            elif isinstance(msg, (ScanStart, EngineScanStart)):
+                if busy:
                     await websocket.send_text(Error(message="scan already in progress").model_dump_json())
                     continue
+                cfg: AppConfig = websocket.app.state.config
+                websocket.app.state.engine_active = isinstance(msg, EngineScanStart)
+                if isinstance(msg, EngineScanStart):
+                    factory: EngineFactory | None = websocket.app.state.engine_factory
+                    if factory is None:
+                        await websocket.send_text(Error(message="engine scan unavailable").model_dump_json())
+                        continue
+                    camera: Camera = websocket.app.state.camera
+                    task = asyncio.create_task(_engine_scan(websocket, uv, camera, factory, cfg.scan_seconds))
                 else:
-                    cfg: AppConfig = websocket.app.state.config
-                    scan_task = asyncio.create_task(_scan(websocket, uv, detector, cfg))
+                    task = asyncio.create_task(_scan(websocket, uv, detector, cfg))
+                websocket.app.state.scan_task = task
             else:
                 # TODO(backend): binary_view -> stream the binary image the AI sees instead of the display frame
                 await websocket.send_text(Error(message=f"{msg.type} is not implemented yet").model_dump_json())
@@ -54,11 +73,13 @@ async def ws(websocket: WebSocket) -> None:
         pass
     finally:
         uv.all_off()  # frontend gone -> every UV channel off (systems/api.md)
+        active: asyncio.Task[None] | None = websocket.app.state.scan_task
         try:
-            if scan_task is not None:
-                scan_task.cancel()
+            if active is not None and not active.done():
+                if not active.cancelling():
+                    active.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await scan_task
+                    await active
         finally:
             frames.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -73,6 +94,68 @@ async def _send_frames(websocket: WebSocket, stream: Stream) -> None:
             seq, jpeg = await asyncio.to_thread(stream.latest.wait_newer, seq, 0.5)
             if jpeg is not None:
                 await websocket.send_bytes(jpeg)
+
+
+async def _engine_scan(
+    websocket: WebSocket, uv: UvService, camera: Camera, factory: EngineFactory, timeout: float
+) -> None:
+    stop = Event()
+    loop = asyncio.get_running_loop()
+    messages: asyncio.Queue[EngineMessage | None] = asyncio.Queue()
+    missing: set[Side] = {"palm", "back"}
+    worker: asyncio.Task[None] | None = None
+
+    def publish(message: EngineMessage) -> None:
+        loop.call_soon_threadsafe(messages.put_nowait, message)
+
+    async def produce() -> None:
+        try:
+            await asyncio.to_thread(run_engine_scan, factory, camera.latest_color, seq, deadline, stop, publish)
+        finally:
+            messages.put_nowait(None)
+
+    try:
+        async with asyncio.timeout(timeout):
+            for i in range(3):
+                uv.set(i, True)
+            seq = camera.latest_color.sequence()
+            deadline = time.monotonic() + timeout
+            worker = asyncio.create_task(produce())
+            await websocket.send_text(UvState(channels=uv.state()).model_dump_json())
+            while (message := await messages.get()) is not None:
+                if isinstance(message, EngineCapture) and message.status == "ok":
+                    missing.discard(message.side)
+                if isinstance(message, EngineResult):
+                    uv.all_off()
+                    await websocket.send_text(message.model_dump_json())
+                    return
+                await websocket.send_text(message.model_dump_json())
+            await worker
+            # A worker that ends without a score reached its own deadline.
+            raise TimeoutError
+    except TimeoutError:
+        uv.all_off()
+        result = EngineResult(
+            status="incomplete", S=None, S_worst=None, worst_view=None, reason="timeout",
+            missing_views=[f"{hand}_{side}" for side in sorted(missing) for hand in ("left", "right")],
+        )
+        with contextlib.suppress(WebSocketDisconnect, RuntimeError):
+            await websocket.send_text(result.model_dump_json())
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        uv.all_off()
+        log.exception("engine scan failed")
+        with contextlib.suppress(WebSocketDisconnect, RuntimeError):
+            await websocket.send_text(Error(message="engine scan failed").model_dump_json())
+    finally:
+        uv.all_off()
+        stop.set()
+        with contextlib.suppress(WebSocketDisconnect, RuntimeError):
+            await websocket.send_text(UvState(channels=uv.state()).model_dump_json())
+        if worker is not None:
+            # Keep ownership until the blocking engine call has returned and closed.
+            await asyncio.gather(worker, return_exceptions=True)
 
 
 async def _scan(websocket: WebSocket, uv: UvService, detector: Detector, cfg: AppConfig) -> None:
