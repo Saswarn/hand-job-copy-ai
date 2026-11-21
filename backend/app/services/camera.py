@@ -14,6 +14,7 @@ import simplejpeg
 from app.core.config import CameraConfig
 from app.services.camera_rgb import ColorFrame, csi_rgb_frames
 from app.services.latest import Latest
+from app.utils.image import Image
 
 Frames = Generator[bytes, None, None]  # JPEG frames; close() releases the device
 
@@ -96,13 +97,25 @@ def fake_frames(width: int, height: int, fps: int, folder: str | None) -> Frames
 
 
 def _test_pattern(width: int, height: int, i: int, n: int) -> bytes:
+    return simplejpeg.encode_jpeg(_test_pattern_rgb(width, height, i, n), quality=85)
+
+
+def _test_pattern_rgb(width: int, height: int, i: int, n: int) -> Image:
     img = np.zeros((height, width, 3), np.uint8)
     img[..., 0] = np.linspace(0, 255, width, dtype=np.uint8)
     img[..., 2] = np.linspace(0, 255, height, dtype=np.uint8)[:, None]
     size = height // 5
     x, y = (width - size) * i // (n - 1), (height - size) // 2
     img[y : y + size, x : x + size] = 255  # square moving left to right
-    return simplejpeg.encode_jpeg(img, quality=85)
+    return img
+
+
+def fake_rgb_frames(width: int, height: int, fps: int, stop: threading.Event) -> Generator[ColorFrame, None, None]:
+    for frame_id in itertools.count(1):
+        if stop.wait(1 / fps):
+            return
+        image = _test_pattern_rgb(width, height, frame_id % 30, 30)
+        yield ColorFrame(image, frame_id, time.monotonic_ns() // 1_000_000)
 
 
 class Camera:
@@ -151,6 +164,8 @@ def open_camera(cfg: CameraConfig) -> Camera:
     source = os.environ.get("CAMERA_SOURCE")
     if source == "csi-rgb":
         return Camera(csi_rgb_frames(cfg, stop), stop)
+    if source == "fake-rgb":
+        return Camera(fake_rgb_frames(cap.width, cap.height, cap.fps, stop), stop)
     if source == "fake":
         frames = fake_frames(cap.width, cap.height, cap.fps, os.environ.get("CAMERA_FAKE_DIR"))
     elif source == "csi":

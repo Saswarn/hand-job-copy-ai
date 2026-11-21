@@ -60,6 +60,7 @@ class AppConfig(_Strict):
     binary_threshold: int = Field(ge=0, le=255)
     stream: StreamConfig
     scan_seconds: float = Field(gt=0)
+    engine_scan_seconds: float = Field(default=30, gt=0, allow_inf_nan=False)
     dirt_conf: Unit
     dirt_min_frames: int = Field(ge=1)
 
