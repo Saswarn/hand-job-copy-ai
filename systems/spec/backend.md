@@ -78,6 +78,18 @@
 - Docker image arm64 ตรงกับ Raspberry Pi OS Bookworm: `python:3.11.15-slim-bookworm` + uv `0.11.8`
 - Dev (Windows): `docker-compose.yml` (QEMU, mock GPIO, ภาพปลอม `CAMERA_SOURCE=fake`)
 
+### ตรวจการติดตั้ง HandCleanEngine
+
+ใช้ Linux 64 บิต และ Python 3.11 พร้อม `venv` และ Git หาก OpenCV แจ้งว่าหา `libGL.so.1` ไม่พบ ให้ติดตั้งแพ็กเกจระบบ `libgl1` บน Raspberry Pi OS
+
+```bash
+bash systems/scripts/setup-engine.sh
+```
+
+สคริปต์ติดตั้ง engine จาก Git revision ที่กำหนดและ dependencies ที่ pin ไว้ใน `backend/engine-check/requirements.txt` ลงใน `backend/engine-check/.venv` แยกจาก backend เพราะ engine ต้องใช้ NumPy 1.x ส่วน backend ใช้ NumPy 2.x หาก Python 3.11 อยู่ที่ path อื่น ให้ระบุ `PYTHON_BIN=/path/to/python3.11` ตอนรัน
+
+สคริปต์รัน `pip check` และชุดเทสต์ upstream ซึ่งรวมการส่งภาพดำสังเคราะห์ให้ engine จริงและตรวจสถานะเมื่อไม่มีมือ ใช้คำสั่งเดียวกันบน Pi 5 เพื่อยืนยันการติดตั้งบน arm64 ชุดนี้ทดสอบเฉพาะ engine ด้วยภาพสังเคราะห์และไม่เปิดกล้องหรือ UV
+
 ## Type และเทสต์
 
 - `uv run pyright` — strict ทั้ง `app/` และ `tests/` ต้อง 0 error · stub ของ lib ที่ไม่มี type (`gpiozero`, `simplejpeg`, `linuxpy`) อยู่ใน `backend/typings/` เขียนเฉพาะที่ใช้ จะใช้ API ใหม่ของ lib พวกนี้ต้องเพิ่มใน stub ก่อน
