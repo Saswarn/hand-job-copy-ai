@@ -12,6 +12,7 @@ import numpy as np
 import simplejpeg
 
 from app.core.config import CameraConfig
+from app.services.camera_rgb import ColorFrame, csi_rgb_frames
 from app.services.latest import Latest
 
 Frames = Generator[bytes, None, None]  # JPEG frames; close() releases the device
@@ -105,10 +106,13 @@ def _test_pattern(width: int, height: int, i: int, n: int) -> bytes:
 
 
 class Camera:
-    """Reads JPEG frames in its own thread and keeps only the newest one in `latest`."""
+    """Keeps the newest display JPEG and, for a color source, its original frame."""
 
-    def __init__(self, frames: Frames, stop: threading.Event | None = None):
+    def __init__(
+        self, frames: Generator[bytes | ColorFrame, None, None], stop: threading.Event | None = None
+    ) -> None:
         self.latest: Latest[bytes] = Latest()
+        self.latest_color: Latest[ColorFrame] = Latest()
         self._frames = frames
         self._first = next(frames)  # opens the device now, so a missing camera fails at startup
         self._stop = stop if stop is not None else threading.Event()
@@ -123,15 +127,21 @@ class Camera:
 
     def _run(self) -> None:
         try:
-            self.latest.put(self._first)
+            self._publish(self._first)
             for data in self._frames:
                 if self._stop.is_set():
                     break
-                self.latest.put(data)
+                self._publish(data)
         except Exception:
             log.exception("camera thread stopped")
         finally:
             self._frames.close()
+
+    def _publish(self, data: bytes | ColorFrame) -> None:
+        if isinstance(data, ColorFrame):
+            self.latest_color.put(data)
+            data = simplejpeg.encode_jpeg(data.image, quality=85)
+        self.latest.put(data)
 
 
 def open_camera(cfg: CameraConfig) -> Camera:
@@ -139,6 +149,8 @@ def open_camera(cfg: CameraConfig) -> Camera:
     cap = cfg.capture
     stop = threading.Event()
     source = os.environ.get("CAMERA_SOURCE")
+    if source == "csi-rgb":
+        return Camera(csi_rgb_frames(cfg, stop), stop)
     if source == "fake":
         frames = fake_frames(cap.width, cap.height, cap.fps, os.environ.get("CAMERA_FAKE_DIR"))
     elif source == "csi":
