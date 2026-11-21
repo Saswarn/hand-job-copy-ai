@@ -21,10 +21,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.config_path = CONFIG_PATH
     app.state.config = cfg = load_config(app.state.config_path)
     app.state.uv = uv = UvService(cfg.uv_gpio)  # every channel starts off
+    app.state.scan_task = None
+    app.state.engine_active = False
+    app.state.engine_factory = None  # The engine integration supplies the factory.
     camera: Camera | None = None
     stream: Stream | None = None
     try:
-        camera = open_camera(cfg.camera)
+        app.state.camera = camera = open_camera(cfg.camera)
         detector = Detector()
         app.state.detector = detector
         app.state.stream = stream = Stream(camera, detector, cfg.camera.crop, cfg.stream)

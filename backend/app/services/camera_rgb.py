@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from dataclasses import dataclass
 from threading import Event
+from typing import ClassVar, Literal
 
 import numpy as np
 
@@ -10,6 +11,7 @@ from app.utils.image import Image
 
 @dataclass(frozen=True)
 class ColorFrame:
+    pixel_format: ClassVar[Literal["RGB"]] = "RGB"
     image: Image  # RGB uint8 in the engine's expected channel order
     frame_id: int
     timestamp_ms: int
