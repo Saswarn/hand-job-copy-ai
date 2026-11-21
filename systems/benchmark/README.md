@@ -1,5 +1,7 @@
 # Benchmark
 
+สำหรับขั้นตอนทดสอบ engine ผ่าน WebSocket และตรวจการดับ UV บนเครื่องจริง ดู [ตรวจรับ HandCleanEngine บน Raspberry Pi 5](engine-acceptance.md)
+
 วัดเวลาของแต่ละขั้นใน pipeline แยกกัน เพื่อรู้ว่าคอขวดอยู่ตรงไหนก่อนจะเปลี่ยนเครื่องมือ
 
 | ขั้น | วัดอะไร | metric ที่เกี่ยว |
