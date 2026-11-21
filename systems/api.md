@@ -64,8 +64,8 @@ Base: `http://localhost:8000` · WebSocket: `ws://localhost:8000/ws`
 
 | `type` | ข้อมูล | ส่งเมื่อ |
 |---|---|---|
-| `engine_preview` | `frame_id`, `hands_found`, `side`, `stable_ms`, `ready_to_capture`, `needed_sides`, `guidance` | engine ประเมินเฟรมพรีวิวใหม่ |
-| `engine_capture` | `status` (`ok`, `NO_HAND`, `ONE_HAND`), `side`, `hands` (มือ, คะแนน และสัดส่วนคราบ 5 ระดับ), `warnings` | มีการวิเคราะห์ภาพเต็มความละเอียด |
+| `engine_preview` | `frame_id`, `hands_found`, `side`, `stable_ms`, `ready_to_capture`, `needed_sides`, `guidance`, `timings_ms` | engine ประเมินเฟรมพรีวิวใหม่ |
+| `engine_capture` | `status` (`ok`, `NO_HAND`, `ONE_HAND`), `side`, `hands` (มือ, คะแนน และสัดส่วนคราบ 5 ระดับ), `warnings`, `timings_ms` | มีการวิเคราะห์ภาพเต็มความละเอียด |
 | `engine_result` | `status` (`ok`, `incomplete`), `S`, `S_worst`, `worst_view`, `missing_views`, `reason` (`null` หรือ `timeout`) | ได้ผลจบจาก engine หรือหมดเวลาสแกน คะแนนเป็น `null` เมื่อหมดเวลา |
 
 Backend ส่งเฉพาะ metadata ของผลสแกนและยังส่งภาพสดเป็น JPEG ตามเดิม ผล `level_map` ยังไม่อยู่ใน WebSocket contract รอบนี้ ผู้ทดสอบสามารถอ่านผลผ่าน WebSocket client ได้

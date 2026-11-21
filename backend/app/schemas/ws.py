@@ -59,6 +59,7 @@ class EnginePreview(BaseModel):
     ready_to_capture: bool
     needed_sides: list[Side]
     guidance: str
+    timings_ms: dict[str, float] = Field(default_factory=dict)
 
 
 class EngineHand(BaseModel):
@@ -73,6 +74,7 @@ class EngineCapture(BaseModel):
     side: Side
     hands: list[EngineHand]
     warnings: list[str]
+    timings_ms: dict[str, float] = Field(default_factory=dict)
 
 
 class EngineResult(BaseModel):
