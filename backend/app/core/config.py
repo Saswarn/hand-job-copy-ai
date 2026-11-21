@@ -22,6 +22,15 @@ class Capture(_Strict):
     fps: int = Field(gt=0)
 
 
+PositiveGain = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+
+
+class CsiRgbConfig(_Strict):
+    exposure_us: int = Field(gt=0)
+    analogue_gain: PositiveGain
+    colour_gains: tuple[PositiveGain, PositiveGain]
+
+
 class CameraConfig(_Strict):
     device: str
     capture: Capture
@@ -30,6 +39,7 @@ class CameraConfig(_Strict):
     white_balance: int
     zoom: float = Field(gt=0)
     crop: Crop
+    csi_rgb: CsiRgbConfig | None = None
 
     @model_validator(mode="after")
     def _crop_not_empty(self) -> "CameraConfig":

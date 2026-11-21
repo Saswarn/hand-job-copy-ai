@@ -44,6 +44,14 @@
 
 สำหรับกล้อง CSI ให้ปิด `rpicam-hello` ก่อน แล้วรัน `CAMERA_SOURCE=csi bash systems/scripts/run-backend.sh` จากโฟลเดอร์โปรเจกต์บน Pi โดยตรง สคริปต์นี้ต้องเรียก `rpicam-vid` ได้จาก `PATH` ส่วน Docker ของ Pi ในโปรเจกต์ตั้งค่าสำหรับกล้อง USB
 
+#### ภาพสีสำหรับ HandCleanEngine บน CSI
+
+โหมด `CAMERA_SOURCE=csi-rgb` ใช้ Picamera2 บน Raspberry Pi OS โดย Python ที่ใช้รัน backend ต้อง import `picamera2` จากแพ็กเกจระบบได้ ใช้ interpreter เวอร์ชันเดียวกับแพ็กเกจของระบบและเปิดให้ environment เห็น system packages โหมดนี้ใช้กล้อง CSI เพียง instance เดียว ภาพต้นฉบับ RGB `uint8` เข้าทาง `Camera.latest_color` และแปลงเป็น JPEG เพื่อส่งผ่านเส้นทางภาพสดเดิม
+
+- ตั้ง `camera.capture` ให้ตรงความละเอียดภาพนิ่งและ FPS ที่กล้องรองรับ `ColorFrame.preview()` ย่อภาพให้ด้านยาวไม่เกิน 640 px พร้อมคง `frame_id` และ `timestamp_ms` จาก `SensorTimestamp` ของภาพเดียวกัน
+- ระบุ `camera.csi_rgb` ใน `config.json` โดยใช้ `exposure_us`, `analogue_gain` และ `colour_gains` คู่แดง/น้ำเงิน ค่าทั้งหมดต้องมากกว่าศูนย์ และ exposure ต้องไม่เกินเวลาต่อเฟรม โหมดนี้ส่งค่าคงที่และปิด AE/AWB ตอนตั้งกล้อง
+- รอบตรวจรับบน Pi ต้องยืนยันค่าที่กล้องใช้จริงจาก metadata และยืนยันว่ารุ่นกล้องรองรับความละเอียดและ FPS ที่เลือก เส้นทาง USB ยังใช้ MJPEG และยังไม่ใช้เป็นภาพสำหรับ engine
+
 ## Scan logic
 
 - กฎตัดสินผลอยู่ที่ `app/services/scan.judge` · รับกรอบของทุกเฟรมเป็น `Box` ตามลำดับ
