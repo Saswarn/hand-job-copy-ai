@@ -23,13 +23,20 @@ class EngineScanStart(BaseModel):
     type: Literal["engine_scan_start"]
 
 
+class EngineScanCancel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["engine_scan_cancel"]
+
+
 class BinaryView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal["binary_view"]
     on: bool
 
 
-ClientMessage = Annotated[UvSet | ScanStart | EngineScanStart | BinaryView, Field(discriminator="type")]
+ClientMessage = Annotated[
+    UvSet | ScanStart | EngineScanStart | EngineScanCancel | BinaryView, Field(discriminator="type")
+]
 
 
 # backend -> frontend

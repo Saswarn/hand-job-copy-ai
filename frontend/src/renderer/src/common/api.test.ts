@@ -2,6 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { parseServerMessage } from './api'
 
 describe('parseServerMessage', () => {
+  it('accepts engine results and rejects invalid capture scores', () => {
+    const result = {
+      type: 'engine_result',
+      status: 'ok',
+      S: 80,
+      S_worst: 75,
+      worst_view: 'left_palm',
+      missing_views: [],
+      reason: null
+    }
+    expect(parseServerMessage(JSON.stringify(result))).toEqual(result)
+    expect(
+      parseServerMessage(
+        '{"type":"engine_capture","status":"ok","side":"palm","hands":[{"hand":"left","score":"80"}],"warnings":[],"timings_ms":{}}'
+      )
+    ).toBeNull()
+  })
+
   it('accepts every message in systems/api.md', () => {
     expect(parseServerMessage('{"type":"uv","channels":[false,true,false]}')).toEqual({
       type: 'uv',

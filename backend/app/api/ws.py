@@ -9,7 +9,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import AppConfig
 from app.schemas.ws import (
-    ClientMessage, EngineCapture, EngineResult, EngineScanStart, Error, ScanStart,
+    ClientMessage, EngineCapture, EngineResult, EngineScanCancel, EngineScanStart, Error, ScanStart,
     ScanState, Side, UvSet, UvState,
 )
 from app.services.camera import Camera
@@ -33,6 +33,7 @@ async def ws(websocket: WebSocket) -> None:
     detector: Detector = websocket.app.state.detector
     await websocket.accept()
     frames = asyncio.create_task(_send_frames(websocket, stream))
+    owned_engine_task: asyncio.Task[None] | None = None
     try:
         await websocket.send_text(UvState(channels=uv.state()).model_dump_json())
         while True:
@@ -44,7 +45,13 @@ async def ws(websocket: WebSocket) -> None:
                 continue
             scan_task: asyncio.Task[None] | None = websocket.app.state.scan_task
             busy = scan_task is not None and not scan_task.done()
-            if isinstance(msg, UvSet):
+            if isinstance(msg, EngineScanCancel):
+                if scan_task is not None and scan_task is owned_engine_task and busy:
+                    uv.all_off()
+                    if not scan_task.cancelling():
+                        scan_task.cancel()
+                    await websocket.send_text(UvState(channels=uv.state()).model_dump_json())
+            elif isinstance(msg, UvSet):
                 if busy and websocket.app.state.engine_active:
                     await websocket.send_text(Error(message="UV is owned by the engine scan").model_dump_json())
                     continue
@@ -63,6 +70,7 @@ async def ws(websocket: WebSocket) -> None:
                         continue
                     camera: Camera = websocket.app.state.camera
                     task = asyncio.create_task(_engine_scan(websocket, uv, camera, factory, cfg.engine_scan_seconds))
+                    owned_engine_task = task
                 else:
                     task = asyncio.create_task(_scan(websocket, uv, detector, cfg))
                 websocket.app.state.scan_task = task

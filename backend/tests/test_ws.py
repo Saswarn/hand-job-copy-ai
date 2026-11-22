@@ -303,6 +303,22 @@ def test_engine_error_turns_uv_off() -> None:
             assert pin_states() == [False, False, False]
 
 
+def test_only_engine_scan_owner_can_cancel_and_turn_off_uv() -> None:
+    with TestClient(app) as client:
+        app.state.engine_factory = MockScanEngine
+        with client.websocket_connect("/ws") as owner, client.websocket_connect("/ws") as other:
+            assert receive_json(other)["type"] == "uv"
+            start_engine_scan(owner)
+            other.send_json({"type": "engine_scan_cancel"})
+            # A following command confirms that the other client's cancel has been handled.
+            other.send_json({"type": "scan_start"})
+            assert receive_json(other)["message"] == "scan already in progress"
+            assert pin_states() == [True, True, True]
+            owner.send_json({"type": "engine_scan_cancel"})
+            assert receive_json(owner) == {"type": "uv", "channels": [False, False, False]}
+            assert pin_states() == [False, False, False]
+
+
 def test_engine_scan_is_unavailable_without_factory() -> None:
     with TestClient(app) as client, client.websocket_connect("/ws") as ws:
         assert receive_json(ws)["type"] == "uv"
