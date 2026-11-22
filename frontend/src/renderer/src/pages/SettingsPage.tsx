@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { ROUTES } from '../common/routes'
 import { useBackend } from '../hooks/useBackend'
 
@@ -42,6 +42,12 @@ export default function SettingsPage(): React.JSX.Element {
           <h2 id="s-scan" className="text-body font-bold">
             การสแกน
           </h2>
+          <Link
+            className="mt-4 inline-block rounded-xl border-2 border-ink px-5 py-2"
+            to={ROUTES.debugAi}
+          >
+            Debug AI
+          </Link>
         </section>
       </div>
     </main>

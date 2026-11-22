@@ -2,5 +2,6 @@
 export const ROUTES = {
   tutorial: '/',
   detection: '/detection',
-  settings: '/settings'
+  settings: '/settings',
+  debugAi: '/settings/ai'
 } as const

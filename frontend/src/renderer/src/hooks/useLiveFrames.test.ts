@@ -35,6 +35,7 @@ describe('useLiveFrames', () => {
       scan: null,
       error: null,
       send: vi.fn(),
+      subscribeMessages: () => unsubscribe,
       subscribeFrames: (l) => {
         listener = l
         return unsubscribe

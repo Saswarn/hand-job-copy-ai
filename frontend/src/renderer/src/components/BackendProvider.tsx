@@ -14,12 +14,14 @@ export default function BackendProvider({ children }: { children: ReactNode }): 
   const [error, setError] = useState<string | null>(null)
   const connection = useRef<BackendConnection | null>(null)
   const frameListeners = useRef(new Set<FrameListener>())
+  const messageListeners = useRef(new Set<(message: ServerMessage) => void>())
 
   useEffect(() => {
     const onMessage = (msg: ServerMessage): void => {
       if (msg.type === 'uv') setUv(msg.channels)
       else if (msg.type === 'scan') setScan(msg)
-      else setError(msg.message)
+      else if (msg.type === 'error') setError(msg.message)
+      messageListeners.current.forEach((listen) => listen(msg))
     }
     const conn = connectBackend({
       onFrame: (jpeg) => frameListeners.current.forEach((listen) => listen(jpeg)),
@@ -41,10 +43,16 @@ export default function BackendProvider({ children }: { children: ReactNode }): 
       frameListeners.current.delete(listener)
     }
   }, [])
+  const subscribeMessages = useCallback((listener: (message: ServerMessage) => void) => {
+    messageListeners.current.add(listener)
+    return () => {
+      messageListeners.current.delete(listener)
+    }
+  }, [])
 
   const value = useMemo<Backend>(
-    () => ({ connected, uv, scan, error, send, subscribeFrames }),
-    [connected, uv, scan, error, send, subscribeFrames]
+    () => ({ connected, uv, scan, error, send, subscribeFrames, subscribeMessages }),
+    [connected, uv, scan, error, send, subscribeFrames, subscribeMessages]
   )
 
   return <BackendContext.Provider value={value}>{children}</BackendContext.Provider>

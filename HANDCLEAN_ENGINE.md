@@ -47,3 +47,7 @@ CAMERA_SOURCE=csi-rgb HANDCLEAN_ENGINE=real GPIOZERO_PIN_FACTORY=mock bash syste
 สำหรับการสแกนกับไฟจริง ให้ยืนยันชุดไฟและรีเลย์ก่อน แล้วทำตาม [คู่มือตรวจรับบน Pi 5](systems/benchmark/engine-acceptance.md) ซึ่งมีขั้นตอนทดสอบ GPIO จริงและการดับไฟ UV
 
 หากใช้ WebSocket client ของคุณเอง ให้เชื่อมต่อ `ws://localhost:8000/ws` แล้วส่ง `{"type":"engine_scan_start"}` ดูฟิลด์ผลลัพธ์ใน [สัญญา WebSocket](systems/api.md)
+
+## ดูผลบนจอ Debug AI
+
+เปิด frontend พร้อม backend ที่เปิดโหมด HandCleanEngine แล้ว กดค้างมุมขวาบน 3 วินาทีเพื่อเข้า **Settings / Debug** จากนั้นเลือก **Debug AI** ในส่วนการสแกน กด **เริ่มสแกน** เพื่อดูภาพสด คำแนะนำ ผลรายด้าน และคะแนนรวม กด **หยุดสแกน** หรือกลับออกจากหน้าเพื่อยกเลิกรอบที่กำลังทำงาน
