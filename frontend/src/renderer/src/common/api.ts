@@ -30,6 +30,8 @@ export type EnginePreview = {
   side: Side | 'unsure' | null
   guidance: string
   timings_ms: Record<string, number>
+  /** Variance of the Laplacian on the preview: compare only while turning the focus ring. */
+  focus: number | null
 }
 export type EngineCapture = {
   type: 'engine_capture'
@@ -87,13 +89,15 @@ export function parseServerMessage(text: string): ServerMessage | null {
       return isNumber(data.hands_found) &&
         (isSide(data.side) || data.side === null || data.side === 'unsure') &&
         isString(data.guidance) &&
-        isTimings(data.timings_ms)
+        isTimings(data.timings_ms) &&
+        (isNumber(data.focus) || data.focus === null)
         ? {
             type: 'engine_preview',
             hands_found: data.hands_found,
             side: data.side,
             guidance: data.guidance,
-            timings_ms: data.timings_ms
+            timings_ms: data.timings_ms,
+            focus: data.focus
           }
         : null
     case 'engine_capture':

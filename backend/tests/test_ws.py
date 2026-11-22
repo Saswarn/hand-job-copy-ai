@@ -15,8 +15,10 @@ from app.schemas.ws import EngineCapture, EnginePreview, EngineResult, Side
 from app.services.camera import Camera
 from app.services.camera_rgb import ColorFrame
 from app.services.detector import Detector
+from app.services.engine_overlay import EngineOverlay
+from app.services.engine_scan import EngineReply
 from app.services.uv import UvService
-from app.utils.image import Box
+from app.utils.image import Box, Palette, palette
 
 PINS = load_config().uv_gpio
 _json_message = TypeAdapter(dict[str, object])
@@ -173,18 +175,21 @@ def test_detector_error_turns_uv_off_and_reports_error() -> None:
 
 class MockScanEngine:
     def __init__(self, *, fail: bool = False, wait: Event | None = None) -> None:
-        self.thread_id = get_ident()
+        self.thread_id = 0  # every call of one session must come from the same thread
         self.captures: list[Side] = []
         self.fail = fail
         self.wait = wait
         self.started_preview = Event()
-        self.closed = Event()
+
+    @property
+    def palette(self) -> Palette:
+        return palette(["#00e5ff", "#00e65a", "#ffeb00", "#ff8c00", "#ff0040"])
 
     def start_session(self) -> str:
-        assert get_ident() == self.thread_id
+        self.thread_id = get_ident()
         return "test"
 
-    def push_preview(self, frame: ColorFrame) -> EnginePreview:
+    def push_preview(self, frame: ColorFrame) -> EngineReply:
         assert get_ident() == self.thread_id
         assert frame.pixel_format == "RGB"
         assert frame.image.shape == (320, 640, 3)
@@ -194,27 +199,45 @@ class MockScanEngine:
         if self.fail:
             raise ValueError("engine error")
         side = "back" if frame.frame_id >= 4 else "palm"
-        return EnginePreview(
+        preview = EnginePreview(
             frame_id=frame.frame_id, hands_found=2, side=side, stable_ms=1000,
             ready_to_capture=True, needed_sides=[side], guidance="CAPTURE_NOW",
         )
+        hands = [[(0.25, 0.5)] * 21, [(0.75, 0.5)] * 21]
+        return EngineReply({**preview.model_dump(), "landmarks": hands}, np.ones((32, 64), np.uint8))
 
-    def submit_capture(self, frame: ColorFrame, side: Side) -> EngineCapture:
+    def submit_capture(self, frame: ColorFrame, side: Side) -> EngineReply:
         assert get_ident() == self.thread_id
         assert frame.image.shape == (400, 800, 3)
         self.captures.append(side)
-        return EngineCapture(
+        capture = EngineCapture(
             status="NO_HAND" if len(self.captures) == 1 else "ok", side=side, hands=[],
             warnings=["MASK_FALLBACK"] if side == "back" else [],
         )
+        return EngineReply(capture, np.full((32, 64), 3, np.uint8) if capture.status == "ok" else None)
 
     def finish_session(self) -> EngineResult:
         assert get_ident() == self.thread_id
         return EngineResult(status="ok", S=80, S_worst=70, worst_view="left_back", missing_views=[])
 
-    def close(self) -> None:
-        assert get_ident() == self.thread_id
-        self.closed.set()
+
+class FactoryHost:
+    """EngineHost that makes a new MockScanEngine per scan, in the scan's worker thread."""
+
+    def __init__(self, factory: Callable[[], MockScanEngine]) -> None:
+        self.factory = factory
+        self.discarded = 0
+
+    def acquire(self) -> MockScanEngine:
+        return self.factory()
+
+    def discard(self) -> None:
+        self.discarded += 1
+
+
+def engine_overlay() -> EngineOverlay:
+    overlay: EngineOverlay = app.state.engine_overlay
+    return overlay
 
 
 def add_color_frame(frame_id: int) -> None:
@@ -230,7 +253,7 @@ def start_engine_scan(ws: WebSocketTestSession) -> None:
 
 def test_engine_scan_retries_capture_and_scores_two_sides() -> None:
     with TestClient(app) as client:
-        app.state.engine_factory = MockScanEngine
+        app.state.engine_host = FactoryHost(MockScanEngine)
         app.state.config = load_config().model_copy(update={"engine_scan_seconds": 2.0})
         add_color_frame(0)  # A frame taken before UV was turned on is stale.
         with client.websocket_connect("/ws") as ws:
@@ -239,6 +262,10 @@ def test_engine_scan_retries_capture_and_scores_two_sides() -> None:
                 add_color_frame(frame_id)
                 preview = receive_json(ws)
                 assert (preview["type"], preview["frame_id"]) == ("engine_preview", frame_id)
+                assert "landmarks" not in preview  # drawn on the display frame, not sent
+                overlay = engine_overlay().get()
+                assert overlay is not None and overlay.live is not None and len(overlay.hands) == 2
+                assert (overlay.inset is None) == (frame_id < 3)  # the first ok capture adds the inset
                 if status is None:
                     continue
                 capture = receive_json(ws)
@@ -247,6 +274,10 @@ def test_engine_scan_retries_capture_and_scores_two_sides() -> None:
             result = receive_json(ws)
             assert (result["type"], result["status"], result["S"]) == ("engine_result", "ok", 80)
             assert pin_states() == [False, False, False]
+            # After the score only the last capture stays on screen, for RESULT_SECONDS.
+            assert wait_until(lambda: (o := engine_overlay().get()) is not None and o.live is None)
+            overlay = engine_overlay().get()
+            assert overlay is not None and overlay.inset is not None and overlay.hands == ()
 
 
 def test_engine_timeout_drops_uv_while_engine_is_blocked() -> None:
@@ -260,7 +291,7 @@ def test_engine_timeout_drops_uv_while_engine_is_blocked() -> None:
             engine.started_preview = entered
             return engine
 
-        app.state.engine_factory = factory
+        app.state.engine_host = FactoryHost(factory)
         with client.websocket_connect("/ws") as ws:
             start_engine_scan(ws)
             add_color_frame(1)
@@ -273,11 +304,13 @@ def test_engine_timeout_drops_uv_while_engine_is_blocked() -> None:
                 assert pin_states() == [False, False, False]
             finally:
                 resume.set()
+            assert wait_until(lambda: app.state.scan_task.done() is True)
+            assert engine_overlay().get() is None
 
 
 def test_engine_scan_reserves_uv_and_disconnect_aborts_scan() -> None:
     with TestClient(app) as client:
-        app.state.engine_factory = MockScanEngine
+        app.state.engine_host = FactoryHost(MockScanEngine)
         app.state.config = load_config().model_copy(update={"engine_scan_seconds": 5.0})
         with client.websocket_connect("/ws") as observer:
             assert receive_json(observer)["type"] == "uv"
@@ -289,23 +322,27 @@ def test_engine_scan_reserves_uv_and_disconnect_aborts_scan() -> None:
                 assert receive_json(observer)["message"] == "UV is owned by the engine scan"
             assert wait_until(lambda: pin_states() == [False, False, False])
             assert wait_until(lambda: app.state.scan_task.done() is True)
+            assert engine_overlay().get() is None
             observer.send_json({"type": "engine_scan_start"})
             assert receive_json(observer) == {"type": "uv", "channels": [True, True, True]}
 
 
 def test_engine_error_turns_uv_off() -> None:
     with TestClient(app) as client:
-        app.state.engine_factory = lambda: MockScanEngine(fail=True)
+        host = FactoryHost(lambda: MockScanEngine(fail=True))
+        app.state.engine_host = host
         with client.websocket_connect("/ws") as ws:
             start_engine_scan(ws)
             add_color_frame(1)
             assert receive_json(ws) == {"type": "error", "message": "engine scan failed"}
             assert pin_states() == [False, False, False]
+            assert host.discarded == 1  # a failed engine is replaced on the next scan
+            assert engine_overlay().get() is None
 
 
 def test_only_engine_scan_owner_can_cancel_and_turn_off_uv() -> None:
     with TestClient(app) as client:
-        app.state.engine_factory = MockScanEngine
+        app.state.engine_host = FactoryHost(MockScanEngine)
         with client.websocket_connect("/ws") as owner, client.websocket_connect("/ws") as other:
             assert receive_json(other)["type"] == "uv"
             start_engine_scan(owner)
@@ -319,9 +356,55 @@ def test_only_engine_scan_owner_can_cancel_and_turn_off_uv() -> None:
             assert pin_states() == [False, False, False]
 
 
-def test_engine_scan_is_unavailable_without_factory() -> None:
+def test_engine_scan_is_unavailable_without_engine() -> None:
     with TestClient(app) as client, client.websocket_connect("/ws") as ws:
         assert receive_json(ws)["type"] == "uv"
         ws.send_json({"type": "engine_scan_start"})
         assert receive_json(ws) == {"type": "error", "message": "engine scan unavailable"}
         assert pin_states() == [False, False, False]
+
+
+class LoadingHost(FactoryHost):
+    """EngineHost whose engine is still loading until `loaded` is set, or fails to load."""
+
+    def __init__(self, *, fail: bool = False) -> None:
+        super().__init__(MockScanEngine)
+        self.loading = Event()
+        self.loaded = Event()
+        self.fail = fail
+
+    def acquire(self) -> MockScanEngine:
+        self.loading.set()
+        self.loaded.wait(2)
+        if self.fail:
+            raise RuntimeError("engine failed to start")
+        return super().acquire()
+
+
+def test_engine_scan_turns_uv_on_only_after_the_engine_has_loaded() -> None:
+    host = LoadingHost()
+    with TestClient(app) as client:
+        app.state.engine_host = host
+        with client.websocket_connect("/ws") as ws:
+            assert receive_json(ws)["type"] == "uv"
+            ws.send_json({"type": "engine_scan_start"})
+            assert host.loading.wait(1)
+            time.sleep(0.1)
+            assert pin_states() == [False, False, False]  # no UV while the engine loads
+            host.loaded.set()
+            assert receive_json(ws) == {"type": "uv", "channels": [True, True, True]}
+            ws.send_json({"type": "engine_scan_cancel"})
+            assert receive_json(ws) == {"type": "uv", "channels": [False, False, False]}
+
+
+def test_engine_that_fails_to_load_reports_error_without_uv() -> None:
+    host = LoadingHost(fail=True)
+    host.loaded.set()
+    with TestClient(app) as client:
+        app.state.engine_host = host
+        with client.websocket_connect("/ws") as ws:
+            assert receive_json(ws)["type"] == "uv"
+            ws.send_json({"type": "engine_scan_start"})
+            assert receive_json(ws) == {"type": "error", "message": "engine scan failed"}
+            assert receive_json(ws) == {"type": "uv", "channels": [False, False, False]}
+            assert pin_states() == [False, False, False]

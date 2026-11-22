@@ -50,8 +50,18 @@
 
 โหมด `CAMERA_SOURCE=csi-rgb` ใช้ Picamera2 บน Raspberry Pi OS โดย Python ที่ใช้รัน backend ต้อง import `picamera2` จากแพ็กเกจระบบได้ ใช้ interpreter เวอร์ชันเดียวกับแพ็กเกจของระบบและเปิดให้ environment เห็น system packages โหมดนี้ใช้กล้อง CSI เพียง instance เดียว ภาพต้นฉบับ RGB `uint8` เข้าทาง `Camera.latest_color` และแปลงเป็น JPEG เพื่อส่งผ่านเส้นทางภาพสดเดิม
 
-- ตั้ง `camera.capture` ให้ตรงความละเอียดภาพนิ่งและ FPS ที่กล้องรองรับ `ColorFrame.preview()` ย่อภาพให้ด้านยาวไม่เกิน 640 px พร้อมคง `frame_id` และ `timestamp_ms` จาก `SensorTimestamp` ของภาพเดียวกัน
-- ระบุ `camera.csi_rgb` ใน `config.json` โดยใช้ `exposure_us`, `analogue_gain` และ `colour_gains` คู่แดง/น้ำเงิน ค่าทั้งหมดต้องมากกว่าศูนย์ และ exposure ต้องไม่เกินเวลาต่อเฟรม โหมดนี้ส่งค่าคงที่และปิด AE/AWB ตอนตั้งกล้อง
+- ตั้งกล้องแบบเดียวกับ `handclean-pi/pi/handclean_pi.py` ทาง `camera.csi_rgb` (ไม่ใส่ก็ได้ ทุกค่าเป็นอัตโนมัติ) ส่วนทางนี้ใช้ `camera.capture` แค่ `fps` (`width` / `height` เป็นของทาง JPEG/V4L2)
+
+  | key | ไม่ใส่ | ใส่ |
+  |---|---|---|
+  | `size` `[w, h]` | กว้าง 1920 สัดส่วนตามเซนเซอร์ ความสูงปัดเป็นทวีคูณ 16 → HQ IMX477 (4056×3040) ได้ 1920×1440 มุมเต็ม (KBON เลือก 2026-11-22) | ขนาดภาพที่ขอจาก Picamera2 |
+  | `sensor_mode` `[w, h]` | libcamera เลือกเอง | บังคับโหมดเซนเซอร์ เช่น `[2028, 1520]` = HQ binned มุมเต็ม |
+  | `exposure_us` | AE ทำงาน | ปิด AE ล็อก exposure (ต้องไม่เกินเวลาต่อเฟรม `1e6 / capture.fps` µs) |
+  | `analogue_gain` | 1.0 เมื่อล็อก exposure | ใช้ได้เฉพาะคู่กับ `exposure_us` |
+  | `colour_gains` `[r, b]` | AWB ทำงาน | ปิด AWB ล็อก gain แดง/น้ำเงิน |
+
+  ในกล่อง UV ควรล็อกทั้ง exposure และ white balance เพื่อให้สีคงที่ทุกรอบ (ค่าต้องหาจากชุดไฟจริง) · backend log ขนาดภาพ, โหมดเซนเซอร์ และค่าที่ล็อกตอนเปิดกล้อง
+- `ColorFrame.preview()` ย่อภาพให้ด้านยาวไม่เกิน 640 px พร้อมคง `frame_id` และ `timestamp_ms` จาก `SensorTimestamp` ของภาพเดียวกัน
 - รอบตรวจรับบน Pi ต้องยืนยันค่าที่กล้องใช้จริงจาก metadata และยืนยันว่ารุ่นกล้องรองรับความละเอียดและ FPS ที่เลือก เส้นทาง USB ยังใช้ MJPEG และยังไม่ใช้เป็นภาพสำหรับ engine
 
 ## Scan logic
@@ -90,13 +100,15 @@
 
 ### ตรวจการติดตั้ง HandCleanEngine
 
-ใช้ Linux 64 บิต และ Python 3.11 พร้อม `venv` และ Git หาก OpenCV แจ้งว่าหา `libGL.so.1` ไม่พบ ให้ติดตั้งแพ็กเกจระบบ `libgl1` บน Raspberry Pi OS
+ใช้ Linux 64 บิต และ Python 3.11 พร้อม `venv`, Git และ `g++` ที่มี OpenMP (`build-essential`) หาก OpenCV แจ้งว่าหา `libGL.so.1` ไม่พบ ให้ติดตั้งแพ็กเกจระบบ `libgl1` บน Raspberry Pi OS
 
 ```bash
 bash systems/scripts/setup-engine.sh
 ```
 
 สคริปต์ติดตั้ง engine จาก Git revision ที่กำหนดและ dependencies ที่ pin ไว้ใน `backend/engine-check/requirements.txt` ลงใน `backend/engine-check/.venv` แยกจาก backend เพราะ engine ต้องใช้ NumPy 1.x ส่วน backend ใช้ NumPy 2.x หาก Python 3.11 อยู่ที่ path อื่น ให้ระบุ `PYTHON_BIN=/path/to/python3.11` ตอนรัน
+
+สคริปต์ build GrabCut แบบ C++ (`native/grabcut/build.sh` ของ engine ใช้ `-march=native` จึงต้องรันบนเครื่องที่จะใช้งานจริง) ไว้ที่ `backend/engine-check/lib/libhcgrabcut.so` (ไม่เก็บใน git) และ [`engine.toml`](../../backend/engine-check/engine.toml) ตั้ง `mask.method = "grabcut_cpp"` ถ้าหาไฟล์ไม่เจอ engine จะไม่ start แทนที่จะช้าลงราว 4 เท่าแบบเงียบ ๆ (laptop: 291 ms เทียบกับ 2,042 ms ตามที่ handclean-pi วัดไว้) สคริปต์ตรวจด้วยว่า worker รายงาน `mask_backend = grabcut_cpp`
 
 สคริปต์รัน `pip check` และชุดเทสต์ upstream ซึ่งรวมการส่งภาพดำสังเคราะห์ให้ engine จริงและตรวจสถานะเมื่อไม่มีมือ ใช้คำสั่งเดียวกันบน Pi 5 เพื่อยืนยันการติดตั้งบน arm64 ชุดนี้ทดสอบเฉพาะ engine ด้วยภาพสังเคราะห์และไม่เปิดกล้องหรือ UV
 
@@ -110,7 +122,26 @@ CAMERA_SOURCE=fake-rgb HANDCLEAN_ENGINE=mock GPIOZERO_PIN_FACTORY=mock bash syst
 
 บน Pi ให้ใช้ `CAMERA_SOURCE=csi-rgb HANDCLEAN_ENGINE=real` แล้วตั้ง `camera.csi_rgb` ตามหัวข้อภาพสีข้างต้น ทดสอบด้วย GPIO mock ก่อน และใช้ `GPIOZERO_PIN_FACTORY=lgpio` เมื่อตรวจอุปกรณ์จริง ส่ง `{"type":"engine_scan_start"}` ผ่าน `ws://localhost:8000/ws` และอ่านผลตาม [WebSocket API](../api.md)
 
-Backend เรียก process จาก `backend/engine-check/.venv` หนึ่งตัวต่อหนึ่ง scan session และส่งภาพ RGB โดยตรงผ่าน pipe สัญญา deadline ของทั้งรอบใช้ `engine_scan_seconds` ค่าเริ่มต้น 30 วินาที ส่วนการสื่อสารหนึ่งคำสั่งตัดที่ 15 วินาทีเพื่อให้ process ที่ค้างถูกเก็บกวาด การจับภาพเต็มความละเอียดและการเปิด engine บน Pi ยังต้องตรวจว่าสำเร็จภายในเวลาที่ตั้งไว้
+Backend เปิด worker (`backend/engine-check/worker.py` ใน `.venv` ของ engine) **ตัวเดียวตั้งแต่ backend เริ่ม** แบบเบื้องหลัง แล้วใช้ต่อทุกรอบสแกนเหมือน handclean-pi (`EngineWorker` ใน `app/services/engine_process.py`) ส่งภาพ RGB โดยตรงผ่าน pipe
+
+- โหลด engine (MediaPipe + ตารางสีคราบ) รอได้ไม่เกิน 60 วินาที (laptop ใช้ 4.8 วินาที ยังไม่ได้วัดบน Pi) · backend เปิดรับ kiosk ได้ก่อนโหลดเสร็จ · รอบสแกนรอ engine **ก่อน**เปิดไฟ UV และก่อนเริ่มนับ `engine_scan_seconds` · โหลดไม่สำเร็จ = log error แล้วตอบ `error` (`engine scan failed`) โดยไม่เปิดไฟ ครั้งถัดไปลองโหลดใหม่
+- แต่ละรอบเรียก `start_session` ใหม่ (session ที่ถูกยกเลิกค้างไว้จะถูกล้างเอง) · deadline ของทั้งรอบใช้ `engine_scan_seconds` ค่าเริ่มต้น 30 วินาที ส่วนหนึ่งคำสั่งตัดที่ 15 วินาทีแล้ว kill worker
+- worker ตายหรือรอบสแกนเกิด error → ทิ้ง worker ตัวนั้น รอบถัดไปเปิดตัวใหม่ · ปิด backend → ดับ UV ก่อน แล้วจึงปิด worker
+- worker ส่งบรรทัด `ready` (`mask_backend`, `startup_ms`, `level_colors`) แล้ว backend เขียนลง log · คำตอบแต่ละคำสั่งเป็น JSON หนึ่งบรรทัด ตามด้วย level map `uint8` ขนาด `levels_shape` เมื่อมี
+- ภาพสดระหว่างสแกนมีสีคราบหยาบ (`hybrid_labels` + `engine.levels` บนภาพพรีวิว 640 px แบบเดียวกับ handclean-pi ใช้แสดงผลเท่านั้น ไม่ใช่คะแนน), เส้นมือจาก landmark และภาพย่อของภาพที่ถ่ายล่าสุดพร้อมสีคราบ (level map ย่อเหลือ 640 px) วาดใน thread `Stream` ก่อน crop · หลังได้คะแนน ภาพย่อค้างไว้ 15 วินาที · ยกเลิก / หมดเวลา / error ล้างทันที
+
+  สูตรผสมสี: `out = (1 − α) · pixel + α · colour[L]` เฉพาะพิกเซลที่ `1 ≤ L ≤ 5` · บนภาพสดคำนวณเป็น `pixel // 2 + colour[L] // 2` และขยาย level map ลงขนาดจอครั้งเดียวต่อ preview (`LiveLevels`) แต่ละเฟรมจึงแทบไม่เพิ่มเวลา (laptop ภาพ 1920×1440 คราบเต็มสองมือ: 30 ms ต่อเฟรมเท่ากับตอนไม่มี overlay เทียบกับ 139 ms ก่อนแคช · เฟรมแรกของ preview ใหม่ +24 ms)
+
+  | ตัวแปร | คืออะไร | ช่วง | ที่มา |
+  |---|---|---|---|
+  | `pixel` | สีเดิมของภาพ | RGB 0–255 | กล้อง |
+  | `L` | ระดับใน level map (0 นอกมือ, 1–5 คราบ, 6 มือสะอาด, 7 ใช้ไม่ได้) | 0–7 | engine `Level` |
+  | `colour[L]` | สีของระดับ | RGB | engine `[display].level_colors` |
+  | `α` | ความทึบ | 0.5 ภาพสด, 0.6 ภาพย่อ | ภาพย่อ: handclean-pi `EngineLoop._capture` (ทีม HandClean ตั้งเอง) · ภาพสด: เราตั้งเอง ปัดจาก 0.45 ของ handclean-pi `draw_frame` เป็น 0.5 เพื่อใช้หารครึ่งแบบ `uint8` ที่เร็ว |
+
+- `engine_preview.focus` = ความแปรปรวนของ Laplacian บนภาพพรีวิวขาวดำในกรอบมือ (ไม่เห็นมือใช้ครึ่งกลางภาพ) เหมือน `sharpness()` ของ handclean-pi ใช้ตอนหมุนวงแหวนโฟกัสของ HQ camera: ค่ายิ่งสูงยิ่งคม ไม่มีค่าที่ "ดีพอ" ตายตัว
+
+การจับภาพเต็มความละเอียดและการเปิด engine บน Pi ยังต้องตรวจว่าสำเร็จภายในเวลาที่ตั้งไว้
 
 ## Type และเทสต์
 
@@ -122,6 +153,6 @@ Backend เรียก process จาก `backend/engine-check/.venv` หนึ
 
 - [ ] **Deployment บน Pi:** spec เดิมกำหนด systemd; ตอนนี้ setup เป็น Docker `restart: always` — ยืนยันว่าใช้ Docker
 - [ ] **ผล `v4l2-ctl -d /dev/video0 --list-ctrls`** บน Pi จริง (มี `zoom_absolute` ไหม, ชื่อ control ของ exposure / gain / WB)
-- [ ] **ความละเอียดที่ดึงจากกล้อง** (4K / 1080p / 720p) — ตัดสินหลัง benchmark
+- [ ] **ความละเอียดที่ดึงจากกล้อง** (4K / 1080p / 720p) — ตัดสินหลัง benchmark · ทาง HandCleanEngine (`csi-rgb`) ใช้ 1920×1440 ตาม handclean-pi แล้ว (KBON 2026-11-22) ทาง USB ยังรอ
 - [ ] **เพดานเวลาเปิดไฟ UV** (เสนอ 60 วินาที แม้เปิดจากหน้า Debug) — ยังไม่ยืนยัน
 - [ ] ชื่อ device GPIO บน Pi 5 (`/dev/gpiochip0` หรือ `gpiochip4` ขึ้นกับ kernel)

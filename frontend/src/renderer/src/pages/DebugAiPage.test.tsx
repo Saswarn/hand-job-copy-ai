@@ -50,9 +50,11 @@ it('starts on demand and displays guidance, capture warnings and final score', (
     side: 'palm',
     hands_found: 2,
     guidance: 'HOLD_STILL',
-    timings_ms: { total: 2 }
+    timings_ms: { total: 2 },
+    focus: 123.4
   })
   expect(screen.getByText('ถือนิ่ง ๆ')).toBeTruthy()
+  expect(screen.getByText('ความคมชัด (focus) 123 · หมุนวงแหวนโฟกัสให้ค่านี้สูงสุด')).toBeTruthy()
   emit({
     type: 'engine_capture',
     side: 'palm',

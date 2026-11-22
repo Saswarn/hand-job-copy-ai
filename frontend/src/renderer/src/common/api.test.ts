@@ -20,6 +20,24 @@ describe('parseServerMessage', () => {
     ).toBeNull()
   })
 
+  it('accepts engine previews with or without a focus value', () => {
+    const preview = {
+      type: 'engine_preview',
+      hands_found: 2,
+      side: 'palm',
+      guidance: 'HOLD_STILL',
+      timings_ms: { total: 40 },
+      focus: 512.5
+    }
+    // Extra backend fields (frame_id, stable_ms, ...) are dropped.
+    expect(parseServerMessage(JSON.stringify({ ...preview, frame_id: 3 }))).toEqual(preview)
+    expect(parseServerMessage(JSON.stringify({ ...preview, focus: null }))).toEqual({
+      ...preview,
+      focus: null
+    })
+    expect(parseServerMessage(JSON.stringify({ ...preview, focus: '512' }))).toBeNull()
+  })
+
   it('accepts every message in systems/api.md', () => {
     expect(parseServerMessage('{"type":"uv","channels":[false,true,false]}')).toEqual({
       type: 'uv',

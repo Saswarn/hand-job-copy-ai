@@ -25,10 +25,23 @@ class Capture(_Strict):
 PositiveGain = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
 
+Size = tuple[Annotated[int, Field(gt=0)], Annotated[int, Field(gt=0)]]  # width, height
+
+
 class CsiRgbConfig(_Strict):
-    exposure_us: int = Field(gt=0)
-    analogue_gain: PositiveGain
-    colour_gains: tuple[PositiveGain, PositiveGain]
+    """Picamera2 RGB capture for HandCleanEngine. Unset values stay automatic, as in handclean-pi."""
+
+    exposure_us: int | None = Field(default=None, gt=0)  # set = auto exposure off
+    analogue_gain: PositiveGain | None = None  # only with exposure_us; unset = 1.0
+    colour_gains: tuple[PositiveGain, PositiveGain] | None = None  # red, blue; set = auto white balance off
+    size: Size | None = None  # unset = 1920 wide with the sensor's aspect (HQ IMX477 -> 1920x1440)
+    sensor_mode: Size | None = None  # e.g. [2028, 1520] = HQ binned, full field of view; unset = libcamera picks
+
+    @model_validator(mode="after")
+    def _gain_needs_exposure(self) -> "CsiRgbConfig":
+        if self.analogue_gain is not None and self.exposure_us is None:
+            raise ValueError("camera.csi_rgb.analogue_gain needs exposure_us (auto exposure sets the gain)")
+        return self
 
 
 class CameraConfig(_Strict):
@@ -39,7 +52,7 @@ class CameraConfig(_Strict):
     white_balance: int
     zoom: float = Field(gt=0)
     crop: Crop
-    csi_rgb: CsiRgbConfig | None = None
+    csi_rgb: CsiRgbConfig = CsiRgbConfig()
 
     @model_validator(mode="after")
     def _crop_not_empty(self) -> "CameraConfig":

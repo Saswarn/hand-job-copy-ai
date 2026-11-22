@@ -1,0 +1,6 @@
+# Overrides of the HandCleanEngine default config (handclean_engine/default_config.toml) for this kiosk.
+# Paths are relative to backend/engine-check: the backend starts worker.py with that working directory.
+
+[mask]
+method = "grabcut_cpp"            # fail at startup when the C++ GrabCut is missing instead of running ~4x slower
+cpp_lib = "lib/libhcgrabcut.so"   # built by systems/scripts/setup-engine.sh

@@ -14,7 +14,8 @@ from app.schemas.ws import (
 )
 from app.services.camera import Camera
 from app.services.detector import Detector
-from app.services.engine_scan import EngineFactory, EngineMessage, run_engine_scan
+from app.services.engine_overlay import EngineOverlay
+from app.services.engine_scan import EngineHost, EngineMessage, run_engine_scan
 from app.services.scan import judge
 from app.services.stream import Stream
 from app.services.uv import UvService
@@ -64,12 +65,15 @@ async def ws(websocket: WebSocket) -> None:
                 cfg: AppConfig = websocket.app.state.config
                 websocket.app.state.engine_active = isinstance(msg, EngineScanStart)
                 if isinstance(msg, EngineScanStart):
-                    factory: EngineFactory | None = websocket.app.state.engine_factory
-                    if factory is None:
+                    host: EngineHost | None = websocket.app.state.engine_host
+                    if host is None:
                         await websocket.send_text(Error(message="engine scan unavailable").model_dump_json())
                         continue
                     camera: Camera = websocket.app.state.camera
-                    task = asyncio.create_task(_engine_scan(websocket, uv, camera, factory, cfg.engine_scan_seconds))
+                    overlay: EngineOverlay = websocket.app.state.engine_overlay
+                    task = asyncio.create_task(
+                        _engine_scan(websocket, uv, camera, host, overlay, cfg.engine_scan_seconds)
+                    )
                     owned_engine_task = task
                 else:
                     task = asyncio.create_task(_scan(websocket, uv, detector, cfg))
@@ -105,7 +109,12 @@ async def _send_frames(websocket: WebSocket, stream: Stream) -> None:
 
 
 async def _engine_scan(
-    websocket: WebSocket, uv: UvService, camera: Camera, factory: EngineFactory, timeout: float
+    websocket: WebSocket,
+    uv: UvService,
+    camera: Camera,
+    host: EngineHost,
+    overlay: EngineOverlay,
+    timeout: float,
 ) -> None:
     stop = Event()
     loop = asyncio.get_running_loop()
@@ -118,11 +127,15 @@ async def _engine_scan(
 
     async def produce() -> None:
         try:
-            await asyncio.to_thread(run_engine_scan, factory, camera.latest_color, seq, deadline, stop, publish)
+            await asyncio.to_thread(
+                run_engine_scan, host, engine, camera.latest_color, seq, deadline, stop, publish, overlay
+            )
         finally:
             messages.put_nowait(None)
 
     try:
+        # Wait for the engine (it may still be loading after startup) before the UV lights and the deadline start.
+        engine = await asyncio.to_thread(host.acquire)
         async with asyncio.timeout(timeout):
             for i in range(3):
                 uv.set(i, True)

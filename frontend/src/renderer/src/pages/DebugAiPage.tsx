@@ -133,6 +133,11 @@ export default function DebugAiPage(): React.JSX.Element {
               · พรีวิว {preview.timings_ms.total?.toFixed(1) ?? '—'} ms
             </p>
           )}
+          {preview?.focus != null && (
+            <p>
+              ความคมชัด (focus) {preview.focus.toFixed(0)} · หมุนวงแหวนโฟกัสให้ค่านี้สูงสุด
+            </p>
+          )}
           {(['palm', 'back'] as const).map((side) => {
             const capture = captures[side]
             return (

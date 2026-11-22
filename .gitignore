@@ -15,3 +15,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 .idea/
+
+# HandCleanEngine C++ GrabCut, built per machine by systems/scripts/setup-engine.sh
+backend/engine-check/lib/
