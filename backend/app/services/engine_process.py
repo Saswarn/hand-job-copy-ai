@@ -90,8 +90,8 @@ def configure_engine_factory() -> EngineFactory | None:
         return None
     if mode not in ("mock", "real"):
         raise ValueError("HANDCLEAN_ENGINE must be mock or real")
-    if os.environ.get("CAMERA_SOURCE") not in ("csi-rgb", "fake-rgb"):
-        raise ValueError("HANDCLEAN_ENGINE requires CAMERA_SOURCE=csi-rgb or fake-rgb")
+    if os.environ.get("CAMERA_SOURCE") not in ("csi", "csi-rgb", "fake-rgb"):
+        raise ValueError("HANDCLEAN_ENGINE requires CAMERA_SOURCE=csi, csi-rgb, or fake-rgb")
     python = ENGINE_DIR / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     if not python.is_file():
         raise RuntimeError("Install HandCleanEngine with systems/scripts/setup-engine.sh")

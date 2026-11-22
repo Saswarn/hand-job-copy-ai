@@ -12,6 +12,7 @@ from app.services.camera import csi_frames, open_camera
 def test_csi_reads_split_frames_and_stops_capture(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv("HANDCLEAN_ENGINE", raising=False)
     executable = tmp_path / "rpicam-vid"
     executable.write_text(
         "#!/bin/sh\n"

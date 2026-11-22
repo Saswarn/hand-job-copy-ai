@@ -25,6 +25,13 @@ def test_engine_rejects_jpeg_camera(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @requires_engine
+def test_engine_factory_accepts_csi(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CAMERA_SOURCE", "csi")
+    monkeypatch.setenv("HANDCLEAN_ENGINE", "real")
+    assert configure_engine_factory() is not None
+
+
+@requires_engine
 def test_real_engine_process_posts_valid_results_for_rgb_frame() -> None:
     engine = EngineProcess(Path(ENGINE_PYTHON), "real")
     frame = ColorFrame(np.zeros((240, 320, 3), np.uint8), frame_id=7, timestamp_ms=123)
