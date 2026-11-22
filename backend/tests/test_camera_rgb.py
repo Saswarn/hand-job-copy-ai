@@ -108,5 +108,6 @@ def test_csi_rgb_releases_failed_capture(
 
 def test_csi_rgb_requires_manual_controls(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CAMERA_SOURCE", "csi-rgb")
+    cfg = load_config().camera.model_copy(update={"csi_rgb": None})
     with pytest.raises(ValueError, match="requires camera.csi_rgb"):
-        open_camera(load_config().camera)
+        open_camera(cfg)

@@ -7,7 +7,12 @@
     "gain": 0,
     "white_balance": 0,
     "zoom": 1.0,
-    "crop": [0, 0, 1, 1]
+    "crop": [0, 0, 1, 1],
+    "csi_rgb": {
+      "exposure_us": 10000,
+      "analogue_gain": 1.0,
+      "colour_gains": [1.0, 1.0]
+    }
   },
   "binary_threshold": 128,
   "stream": { "min_width": 1366, "quality": 85 },

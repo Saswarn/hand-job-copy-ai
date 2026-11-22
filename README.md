@@ -37,6 +37,8 @@ Jira: [HAN](https://phuminforwork.atlassian.net/browse/HAN) · ทุกอย�
 
 ## เริ่มต้น
 
+สำหรับติดตั้ง AI และทดลองสแกนด้วยกล้องจำลองหรือกล้อง CSI บน Pi 5 ดู [วิธีใช้งาน HandCleanEngine](HANDCLEAN_ENGINE.md)
+
 ต้องมี: Node 22+ / npm, [uv](https://docs.astral.sh/uv/), Docker
 
 | | Windows (dev) | Pi |
