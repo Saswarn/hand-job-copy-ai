@@ -42,6 +42,8 @@ uv run python -m app.engine_scan_check --expect complete
 CAMERA_SOURCE=csi-rgb HANDCLEAN_ENGINE=real GPIOZERO_PIN_FACTORY=mock bash systems/scripts/run-backend.sh
 ```
 
+เมื่อเปิด `HANDCLEAN_ENGINE` ใช้ `CAMERA_SOURCE=csi` ได้เช่นกัน โหมดนี้อ่านภาพ RGB ผ่าน Picamera2 ด้วยค่า `camera.csi_rgb` ส่วน `csi` ที่เปิดโดยไม่ตั้ง `HANDCLEAN_ENGINE` จะใช้ภาพ JPEG จาก `rpicam-vid` ตามเดิม
+
 จากอีก Terminal รันคำสั่งตรวจผลในข้อ 2 ทำตามคำแนะนำที่แสดง เช่น `HOLD_STILL` ให้ถือนิ่ง และ `FLIP_HANDS` ให้พลิกมือ หากหมดเวลาก่อนครบทั้งสองด้าน ผลจะแสดง `status: "incomplete"`
 
 สำหรับการสแกนกับไฟจริง ให้ยืนยันชุดไฟและรีเลย์ก่อน แล้วทำตาม [คู่มือตรวจรับบน Pi 5](systems/benchmark/engine-acceptance.md) ซึ่งมีขั้นตอนทดสอบ GPIO จริงและการดับไฟ UV

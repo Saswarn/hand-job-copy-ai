@@ -162,7 +162,8 @@ def open_camera(cfg: CameraConfig) -> Camera:
     cap = cfg.capture
     stop = threading.Event()
     source = os.environ.get("CAMERA_SOURCE")
-    if source == "csi-rgb":
+    csi_with_engine = source == "csi" and os.environ.get("HANDCLEAN_ENGINE") in ("mock", "real")
+    if source == "csi-rgb" or csi_with_engine:
         return Camera(csi_rgb_frames(cfg, stop), stop)
     if source == "fake-rgb":
         return Camera(fake_rgb_frames(cap.width, cap.height, cap.fps, stop), stop)

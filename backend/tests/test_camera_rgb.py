@@ -52,12 +52,16 @@ class FakePicamera:
         self.closed = True
 
 
-def test_csi_rgb_camera_keeps_original_and_provides_preview(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("source,engine", [("csi-rgb", "real"), ("csi", "real"), ("csi", "mock")])
+def test_csi_rgb_camera_keeps_original_and_provides_preview(
+    monkeypatch: pytest.MonkeyPatch, source: str, engine: str
+) -> None:
     image = np.empty((400, 800, 3), dtype=np.uint8)
     image[:] = (230, 90, 10)
     fake = FakePicamera(image, 12_345_678_900)
     monkeypatch.setitem(sys.modules, "picamera2", SimpleNamespace(Picamera2=lambda: fake))
-    monkeypatch.setenv("CAMERA_SOURCE", "csi-rgb")
+    monkeypatch.setenv("CAMERA_SOURCE", source)
+    monkeypatch.setenv("HANDCLEAN_ENGINE", engine)
     cfg = load_config().camera.model_copy(update={
         "capture": Capture(width=800, height=400, fps=25),
         "csi_rgb": CsiRgbConfig(exposure_us=10_000, analogue_gain=2.0, colour_gains=(1.8, 1.2)),

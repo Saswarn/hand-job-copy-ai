@@ -46,6 +46,8 @@
 
 #### ภาพสีสำหรับ HandCleanEngine บน CSI
 
+เมื่อตั้ง `HANDCLEAN_ENGINE=real` หรือ `mock` ระบบจะรับ `CAMERA_SOURCE=csi` เป็นชื่อเดียวกับ `csi-rgb` และอ่านภาพสีผ่าน Picamera2 หากไม่ได้เปิด engine ค่า `csi` จะยังใช้ `rpicam-vid` ตามเดิม
+
 โหมด `CAMERA_SOURCE=csi-rgb` ใช้ Picamera2 บน Raspberry Pi OS โดย Python ที่ใช้รัน backend ต้อง import `picamera2` จากแพ็กเกจระบบได้ ใช้ interpreter เวอร์ชันเดียวกับแพ็กเกจของระบบและเปิดให้ environment เห็น system packages โหมดนี้ใช้กล้อง CSI เพียง instance เดียว ภาพต้นฉบับ RGB `uint8` เข้าทาง `Camera.latest_color` และแปลงเป็น JPEG เพื่อส่งผ่านเส้นทางภาพสดเดิม
 
 - ตั้ง `camera.capture` ให้ตรงความละเอียดภาพนิ่งและ FPS ที่กล้องรองรับ `ColorFrame.preview()` ย่อภาพให้ด้านยาวไม่เกิน 640 px พร้อมคง `frame_id` และ `timestamp_ms` จาก `SensorTimestamp` ของภาพเดียวกัน
