@@ -64,11 +64,13 @@ Base: `http://localhost:8000` · WebSocket: `ws://localhost:8000/ws`
 
 | `type` | ข้อมูล | ส่งเมื่อ |
 |---|---|---|
-| `engine_preview` | `frame_id`, `hands_found`, `side`, `stable_ms`, `ready_to_capture`, `needed_sides`, `guidance`, `timings_ms` | engine ประเมินเฟรมพรีวิวใหม่ |
+| `engine_preview` | `frame_id`, `hands_found`, `side`, `stable_ms`, `ready_to_capture`, `needed_sides`, `guidance`, `timings_ms`, `focus` (ตัวเลข ≥ 0 หรือ `null`: ความคมของภาพ ใช้เทียบตอนหมุนวงแหวนโฟกัส ไม่มีเกณฑ์ตายตัว) | engine ประเมินเฟรมพรีวิวใหม่ |
 | `engine_capture` | `status` (`ok`, `NO_HAND`, `ONE_HAND`), `side`, `hands` (มือ, คะแนน และสัดส่วนคราบ 5 ระดับ), `warnings`, `timings_ms` | มีการวิเคราะห์ภาพเต็มความละเอียด |
 | `engine_result` | `status` (`ok`, `incomplete`), `S`, `S_worst`, `worst_view`, `missing_views`, `reason` (`null` หรือ `timeout`) | ได้ผลจบจาก engine หรือหมดเวลาสแกน คะแนนเป็น `null` เมื่อหมดเวลา |
 
-Backend ส่งเฉพาะ metadata ของผลสแกนและยังส่งภาพสดเป็น JPEG ตามเดิม ผล `level_map` ยังไม่อยู่ใน WebSocket contract รอบนี้ ผู้ทดสอบสามารถอ่านผลผ่าน WebSocket client ได้
+Backend ส่งเฉพาะ metadata ของผลสแกนทางข้อความ JSON ส่วน `level_map` และ landmark ไม่ส่งทาง WebSocket: backend วาดลงภาพสด JPEG เอง (ตามกติกา "กรอบ AI วาดบนภาพที่ backend") ระหว่างสแกนภาพสดมีสีคราบหยาบ เส้นมือ และภาพย่อของภาพที่ถ่ายล่าสุดพร้อมสีคราบที่มุมขวาล่าง หลังได้ `engine_result` สถานะ `ok` ภาพย่อค้างอยู่ 15 วินาที รายละเอียดใน [spec backend](spec/backend.md#เปิด-engine-scan-ผ่าน-websocket)
+
+engine โหลดครั้งเดียวตั้งแต่ backend เริ่ม (แบบเบื้องหลัง) และใช้ต่อทุกรอบ ถ้ากด `engine_scan_start` ตอนที่ engine ยังโหลดไม่เสร็จ backend จะรอให้โหลดเสร็จก่อน แล้วจึงเปิด UV (ส่ง `uv`) และเริ่มนับ `engine_scan_seconds` ระหว่างรอ `engine_scan_cancel` ยังยกเลิกได้ ถ้าโหลดไม่สำเร็จจะตอบ `error` (`engine scan failed`) โดยไม่เปิดไฟ
 
 - ใช้เฟรมใหม่หลังเปิด UV เท่านั้น สแกนสำเร็จหนึ่งครั้งต่อด้านฝ่ามือและหลังมือ การจับภาพล้มเหลวลองใหม่ได้ภายใน `engine_scan_seconds` (ค่าเริ่มต้น 30 วินาที)
 - WebSocket ทุกตัวใช้สิทธิ์สแกนร่วมกันหนึ่งรอบ ระหว่าง engine scan จะปฏิเสธ `uv_set` และคำสั่งเริ่มสแกนซ้ำ

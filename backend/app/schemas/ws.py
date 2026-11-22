@@ -67,6 +67,7 @@ class EnginePreview(BaseModel):
     needed_sides: list[Side]
     guidance: str
     timings_ms: dict[str, float] = Field(default_factory=dict)
+    focus: float | None = Field(default=None, ge=0)  # variance of the Laplacian; compare only while focusing
 
 
 class EngineHand(BaseModel):
